@@ -520,6 +520,8 @@ class DistilBertModel(DistilBertPreTrainedModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
+        question_augmentation=None,
+        context_augmentation=None,
     ):
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -544,8 +546,20 @@ class DistilBertModel(DistilBertPreTrainedModel):
         # Prepare head mask if needed
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
+        # Add augmentation embeddings
         if inputs_embeds is None:
             inputs_embeds = self.embeddings(input_ids)  # (bs, seq_length, dim)
+            if question_augmentation is not None:
+                num_tokens_to_replace, dist_len, _ = question_augmentation.shape
+                for i in range(num_tokens_to_replace):
+                    token_ids = question_augmentation[i, :-1, 0].squeeze(0)
+                    token_embeddings = self.embeddings(token_ids)
+                    # token_embeddings = torch.rand((len(token_ids, 20))) testing only
+                    probs = question_augmentation[i, :-1, 1].squeeze()
+                    avg_embed = torch.matmul(probs, token_embeddings)
+                    ind = question_augmentation[i, -1, 0]
+                    inputs_embeds[ind] = avg_embed
+
         return self.transformer(
             x=inputs_embeds,
             attn_mask=attention_mask,
@@ -832,6 +846,8 @@ class DistilBertForQuestionAnswering(DistilBertPreTrainedModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
+        question_augmentation=None,
+        context_augmentation=None,
     ):
         r"""
         start_positions (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
