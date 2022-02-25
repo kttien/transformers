@@ -550,25 +550,25 @@ class DistilBertModel(DistilBertPreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds = self.embeddings(input_ids)  # (bs, seq_length, dim)
             if question_augmentation is not None:
-                num_tokens_to_replace, dist_len, _ = question_augmentation.shape
+                batch_size, num_tokens_to_replace, dist_len, _ = question_augmentation.shape
                 for i in range(num_tokens_to_replace):
-                    token_ids = question_augmentation[i, :-1, 0].squeeze(0)
+                    token_ids = question_augmentation[:, i, :-1, 0].long()
                     token_embeddings = self.embeddings(token_ids)
-                    # token_embeddings = torch.rand((len(token_ids, 20))) testing only
-                    probs = question_augmentation[i, :-1, 1].squeeze()
-                    avg_embed = torch.matmul(probs, token_embeddings)
-                    ind = question_augmentation[i, -1, 0]
-                    inputs_embeds[ind] = avg_embed
+                    probs = question_augmentation[:, i, :-1, 1]
+                    avg_embed = torch.einsum("ij,ijk->ik", probs, token_embeddings)
+                    ind = question_augmentation[:, i, -1, 0].long()
+                    inputs_embeds[range(batch_size), ind] = avg_embed
+                   
             if context_augmentation is not None:
-                num_tokens_to_replace, dist_len, _ = context_augmentation.shape
+                batch_size, num_tokens_to_replace, dist_len, _ = context_augmentation.shape
                 for i in range(num_tokens_to_replace):
-                    token_ids = context_augmentation[i, :-1, 0].squeeze(0)
+                    token_ids = context_augmentation[:, i, :-1, 0].long()
                     token_embeddings = self.embeddings(token_ids)
-                    # token_embeddings = torch.rand((len(token_ids, 20))) testing only
-                    probs = context_augmentation[i, :-1, 1].squeeze()
-                    avg_embed = torch.matmul(probs, token_embeddings)
-                    ind = context_augmentation[i, -1, 0]
-                    inputs_embeds[ind] = avg_embed
+                    probs = context_augmentation[:, i, :-1, 1]
+                    avg_embed = torch.einsum("ij,ijk->ik", probs, token_embeddings)
+                    ind = context_augmentation[:, i, -1, 0].long()
+                    inputs_embeds[range(batch_size), ind] = avg_embed
+
 
         return self.transformer(
             x=inputs_embeds,
@@ -879,6 +879,8 @@ class DistilBertForQuestionAnswering(DistilBertPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            question_augmentation=question_augmentation,
+            context_augmentation=context_augmentation
         )
         hidden_states = distilbert_output[0]  # (bs, max_query_len, dim)
 
